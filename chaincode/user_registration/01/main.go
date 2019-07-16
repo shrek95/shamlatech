@@ -186,6 +186,45 @@ func (t *registrationManager) updateUser(stub shim.ChaincodeStubInterface, args 
 
 }
 
+func (t *registrationManager) deleteUser(stub shim.ChaincodeStubInterface, args []string) {
+	if len(args) != 1 {
+		shim.Error("ERROR: Incorrect number of arguments. Exoecting 1 ")
+	}
+
+	var user = userReg{}
+	userID = args[0]
+
+	userInBytes, err := stub.GetState(userID)
+	if err != nil {
+		shim.Error(err.Error())
+	}
+
+	if userInBytes == nil {
+		return shim.Error("ERROR: No data is available for user ID " + args[0])
+	}
+
+	err := json.Unmarshal(userInBytes, &user)
+	if err != nil {
+		shim.Error("ERROR: Unmarshall unsuccessfull")
+	}
+
+	err = stub.DelState(userID)
+	if err != nil {
+		shim.Error("ERROR: Failed to delete state for userID " + args[0])
+	}
+
+	CKeyDel, err := stub.CreateCompositeKey("uType~uID~contactNo",
+		[]string{
+			user.uType,
+			user.uID,
+			strconv.FormatUint(user.contactNo, 10)})
+
+	err = stub.DelState(userID)
+	if err != nil {
+		shim.Error("ERROR: Failed to delete state for Composite Key of " + args[0])
+	}
+}
+
 func (t *registrationManager) Invoke(stub shim.ChaincodeStubInterface) pb.Response {
 	function, args := stub.GetFunctionAndParameters()
 
