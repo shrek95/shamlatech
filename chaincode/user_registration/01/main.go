@@ -16,9 +16,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/hyperledger/fabric/core/chaincode/shim"
-	"github.com/hyperledger/fabric/protos/peer"
+	peer "github.com/hyperledger/fabric/protos/peer"
 )
 
 // STRUCT registrationManager-----------
@@ -81,7 +82,7 @@ func (t *registrationManager) createUser(stub shim.ChaincodeStubInterface, args 
 		uID:       args[1],
 		fName:     args[2],
 		lName:     args[3],
-		dob:       dob,
+		dob:       uint32(dob),
 		contactNo: contactNo,
 		email:     args[6],
 	}
@@ -96,25 +97,27 @@ func (t *registrationManager) createUser(stub shim.ChaincodeStubInterface, args 
 		shim.Error(err.Error())
 	}
 
-	CKey1, err := stub.CreateCompositeKey("uType~uID~contactNo",
+	cKey1, err := stub.CreateCompositeKey("uType~uID~contactNo",
 		[]string{
 			user.uType,
 			user.uID,
 			strconv.FormatUint(user.contactNo, 10)})
 
 	value := []byte{0x00}
-	err = stub.PutState(Ckey1, value)
+	err = stub.PutState(cKey1, value)
 	if err != nil {
 		shim.Error(err.Error())
 	}
+
+	return shim.Success(nil)
 }
 
-func (t *registrationManager) getUserByID(stud shim.ChaincodeStubInterface, args []string) pb.Response {
+func (t *registrationManager) getUserByID(stub shim.ChaincodeStubInterface, args []string) peer.Response {
 	if len(args) != 1 {
 		return shim.Error("ERROR: Incorrect number of arguments. Expecting 1 ")
 	}
 
-	userInBytes, err := stub.GetState(string.ToLower(args[0]))
+	userInBytes, err := stub.GetState(strings.ToLower(args[0]))
 	if err != nil {
 		shim.Error("ERROR: Failed to get the state of ID " + args[0])
 	}
@@ -126,12 +129,12 @@ func (t *registrationManager) getUserByID(stud shim.ChaincodeStubInterface, args
 	return shim.Success(userInBytes)
 }
 
-func (t *registrationManager) updateUser(stub shim.ChaincodeStubInterface, args []string) {
+func (t *registrationManager) updateUser(stub shim.ChaincodeStubInterface, args []string) peer.Response {
 	if len(args) != 7 {
 		return shim.Error("ERROR: Incorrect number of arguments. Expecting 7 ")
 	}
 
-	userInBytes, err := stub.GetState(string.ToLower(args[1]))
+	userInBytes, err := stub.GetState(strings.ToLower(args[1]))
 	if err != nil {
 		shim.Error("ERROR: Failed to get the state of ID " + args[0])
 	}
@@ -156,7 +159,7 @@ func (t *registrationManager) updateUser(stub shim.ChaincodeStubInterface, args 
 	user.uType = args[0]
 	user.fName = args[2]
 	user.lName = args[3]
-	user.dob = dob
+	user.dob = uint32(dob)
 	user.contactNo = contactNo
 	user.email = args[6]
 
@@ -165,34 +168,33 @@ func (t *registrationManager) updateUser(stub shim.ChaincodeStubInterface, args 
 		return shim.Error("ERROR: Marshalling unsuccessful ")
 	}
 
-	err := stub.PutState(args[1], userInBytes)
+	err = stub.PutState(args[1], userInBytes)
 	if err != nil {
 		return shim.Error("ERROR: No update made ")
 	}
 
-	CKeyUpdate, err := stub.CreateCompositeKey("uType~uID~contactNo",
+	cKeyUpdate, err := stub.CreateCompositeKey("uType~uID~contactNo",
 		[]string{
 			user.uType,
 			user.uID,
 			strconv.FormatUint(user.contactNo, 10)})
 
 	value := []byte{0x00}
-	err = stub.PutState(CkeyUpdate, value)
+	err = stub.PutState(cKeyUpdate, value)
 	if err != nil {
 		shim.Error(err.Error())
 	}
 
 	return shim.Success(nil)
-
 }
 
-func (t *registrationManager) deleteUser(stub shim.ChaincodeStubInterface, args []string) {
+func (t *registrationManager) deleteUser(stub shim.ChaincodeStubInterface, args []string) peer.Response {
 	if len(args) != 1 {
-		shim.Error("ERROR: Incorrect number of arguments. Exoecting 1 ")
+		return shim.Error("ERROR: Incorrect number of arguments. Exoecting 1 ")
 	}
 
 	var user = userReg{}
-	userID = args[0]
+	userID := args[0]
 
 	userInBytes, err := stub.GetState(userID)
 	if err != nil {
@@ -200,32 +202,33 @@ func (t *registrationManager) deleteUser(stub shim.ChaincodeStubInterface, args 
 	}
 
 	if userInBytes == nil {
-		return shim.Error("ERROR: No data is available for user ID " + args[0])
+		return shim.Error(fmt.Sprintf("ERROR: No data is available for user ID %s", args[0]))
 	}
 
-	err := json.Unmarshal(userInBytes, &user)
+	err = json.Unmarshal(userInBytes, &user)
 	if err != nil {
-		shim.Error("ERROR: Unmarshall unsuccessfull")
+		return shim.Error("ERROR: Unmarshall unsuccessfull")
 	}
 
 	err = stub.DelState(userID)
 	if err != nil {
-		shim.Error("ERROR: Failed to delete state for userID " + args[0])
+		return shim.Error(fmt.Sprintf("ERROR: Failed to delete state for userID %s", args[0]))
 	}
 
-	CKeyDel, err := stub.CreateCompositeKey("uType~uID~contactNo",
+	cKeyDel, err := stub.CreateCompositeKey("uType~uID~contactNo",
 		[]string{
 			user.uType,
 			user.uID,
 			strconv.FormatUint(user.contactNo, 10)})
 
-	err = stub.DelState(userID)
+	err = stub.DelState(cKeyDel)
 	if err != nil {
-		shim.Error("ERROR: Failed to delete state for Composite Key of " + args[0])
+		return shim.Error("ERROR: Failed to delete state for Composite Key of " + args[0])
 	}
+	return shim.Success(nil)
 }
 
-func (t *registrationManager) Invoke(stub shim.ChaincodeStubInterface) pb.Response {
+func (t *registrationManager) Invoke(stub shim.ChaincodeStubInterface) peer.Response {
 	function, args := stub.GetFunctionAndParameters()
 
 	if function == "createUser" {
@@ -242,5 +245,14 @@ func (t *registrationManager) Invoke(stub shim.ChaincodeStubInterface) pb.Respon
 
 	if function == "deleteUser" {
 		return t.deleteUser(stub, args)
+	}
+	return shim.Error("ERROR: Received unknown function invocation: " + function)
+
+}
+
+func main() {
+	err := shim.Start(new(registrationManager))
+	if err != nil {
+		fmt.Printf("ERROR: creating new Smart Contract: %s", err)
 	}
 }
