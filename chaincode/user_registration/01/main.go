@@ -165,7 +165,7 @@ func (t *registrationManager) updateUser(stub shim.ChaincodeStubInterface, args 
 
 	userInBytes, err = json.Marshal(user)
 	if err != nil {
-		return shim.Error("ERROR: Marshalling unsuccessful ")
+		return shim.Error("ERROR: Marshalling unsuccessfull ")
 	}
 
 	err = stub.PutState(args[1], userInBytes)
@@ -253,6 +253,6 @@ func (t *registrationManager) Invoke(stub shim.ChaincodeStubInterface) peer.Resp
 func main() {
 	err := shim.Start(new(registrationManager))
 	if err != nil {
-		fmt.Printf("ERROR: creating new Smart Contract: %s", err)
+		return shim.Error(fmt.Sprintf("ERROR: creating new Smart Contract: %s", err))
 	}
 }
