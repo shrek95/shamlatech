@@ -19,6 +19,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -42,16 +43,16 @@ type rentMonetaryVals struct {
 }
 
 type sellMonetaryVals struct {
-	pID                 string
-	uID                 string
-	pType               string
-	price               uint64
-	govCharges          uint64
-	maintenanceExpences uint64
-	addOnExpenses       uint64
+	pID            string
+	uID            string
+	pType          string
+	price          uint64
+	govCharges     uint64
+	maintenanceExp uint64
+	addOnExpenses  uint64
 }
 
-func (p *propertyMonetaryVals) Init(stub.ChaincodeStubInterface) peer.Response {
+func (p *propertyMonetaryVals) Init(stub shim.ChaincodeStubInterface) peer.Response {
 	args := stub.GetStringArgs()
 	if len(args) != 2 {
 		return shim.Error("Incorrect arguments. Expecting a key and a value")
@@ -100,14 +101,14 @@ func (p *propertyMonetaryVals) createRentEntry(stub shim.ChaincodeStubInterface,
 		pID:             args[0],
 		uID:             args[1],
 		pType:           "rent",
-		monthRent:       args[2],
-		deposit:         args[3],
+		monthRent:       monthRent,
+		deposit:         deposit,
 		maintenanceType: args[4],
-		maintenanceVal:  args[5],
-		addOnExpenses:   args[6],
+		maintenanceVal:  maintenanceVal,
+		addOnExpenses:   addOnExpenses,
 	}
 
-	rentValAsBytes, err := json.Marshal(rent)
+	rentValAsBytes, err = json.Marshal(rent)
 	if err != nil {
 		return shim.Error("ERROR: Marshaling unsuccessful")
 	}
@@ -198,7 +199,7 @@ func (p *propertyMonetaryVals) createSellEntry(stub shim.ChaincodeStubInterface,
 		return shim.Error("ERROR: Marshaling unsuccessful")
 	}
 
-	err = stub.PutState(args[0], sell)
+	err = stub.PutState(args[0], sellValsAsBytes)
 	if err != nil {
 		return shim.Error("ERROR: " + err.Error())
 	}
@@ -220,14 +221,90 @@ func (p *propertyMonetaryVals) createSellEntry(stub shim.ChaincodeStubInterface,
 }
 
 func (p *propertyMonetaryVals) getAllOnRentProperties(stub shim.ChaincodeStubInterface, args []string) peer.Response {
+	if len(args) != 1 {
+		return shim.Error("ERROR: Incorrect number of argument. Expecting 1")
+	}
 
+	rentPropCompIterator, err := stub.GetStateByPartialCompositeKey("pID~uID~pType", []string{args[0]})
+	if err != nil {
+		return shim.Error(err.Error())
+	}
+
+	defer rentPropCompIterator.Close()
+
+	var buffer bytes.Buffer
+
+	for i := 0; rentPropCompIterator.HasNext(); i++ {
+		responseRange, err := rentPropCompIterator.Next()
+		if err != nil {
+			return shim.Error(err.Error())
+		}
+
+		_, compositeKeyParts, err := stub.SplitCompositeKey(responseRange.Key)
+		if err != nil {
+			return shim.Error(err.Error())
+		}
+
+		rentType := compositeKeyParts[2]
+		s := fmt.Sprintf("All the %s types are shown ", rentType)
+		fmt.Println(s)
+		pID := compositeKeyParts[0]
+
+		propertyState, err := stub.GetState(pID)
+		if err != nil {
+			return shim.Error(err.Error())
+		}
+
+		buffer.Write(propertyState)
+
+	}
+
+	return shim.Success(buffer.Bytes())
 }
 
 func (p *propertyMonetaryVals) getAllOnSellProperties(stub shim.ChaincodeStubInterface, args []string) peer.Response {
+	if len(args) != 1 {
+		return shim.Error("ERROR: Incorrect number of argument. Expecting 1")
+	}
 
+	sellPropCompIterator, err := stub.GetStateByPartialCompositeKey("pID~uID~pType", []string{args[0]})
+	if err != nil {
+		return shim.Error(err.Error())
+	}
+
+	defer sellPropCompIterator.Close()
+
+	var buffer bytes.Buffer
+
+	for i := 0; sellPropCompIterator.HasNext(); i++ {
+		responseRange, err := sellPropCompIterator.Next()
+		if err != nil {
+			return shim.Error(err.Error())
+		}
+
+		_, compositeKeyParts, err := stub.SplitCompositeKey(responseRange.Key)
+		if err != nil {
+			return shim.Error(err.Error())
+		}
+
+		sellType := compositeKeyParts[2]
+		s := fmt.Sprintf("All the %s types are shown ", sellType)
+		fmt.Println(s)
+		pID := compositeKeyParts[0]
+
+		propertyState, err := stub.GetState(pID)
+		if err != nil {
+			return shim.Error(err.Error())
+		}
+
+		buffer.Write(propertyState)
+
+	}
+
+	return shim.Success(buffer.Bytes())
 }
 
-func (p *propertyMonetaryVals) Invoke(stub.ChaincodeStubInterface) peer.Response {
+func (p *propertyMonetaryVals) Invoke(stub shim.ChaincodeStubInterface) peer.Response {
 	function, args := stub.GetFunctionAndParameters()
 
 	if function == "createRentEntry" {
@@ -248,4 +325,11 @@ func (p *propertyMonetaryVals) Invoke(stub.ChaincodeStubInterface) peer.Response
 
 	return shim.Error("ERROR: Received unknown function invocatio: " + function)
 
+}
+
+func main() {
+	err := shim.Start(new(propertyMonetaryVals))
+	if err != nil {
+		fmt.Printf("ERROR: creating new Smart Contract: %s", err)
+	}
 }
